@@ -3,9 +3,8 @@ Automated movie renamer scraping names from IMDB.
 Targets all .mkv files in a folder.
 
 # Install
-Clone this repository, then:
 ```
-npm install -g .
+npm install -g movie-renamer
 ```
 
 # Usage
