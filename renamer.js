@@ -64,6 +64,9 @@ function getFinalName(file, baseName) {
   if (file.multi)
     name += ' [MULTi]';
   
+  if (file.vo)
+    name += ' [VO]';
+  
   if (file.quality)
     name += ' [' + file.quality + 'p]';
 
@@ -198,14 +201,14 @@ function getImdbName(search) {
 }
 
 function cleanTitle(title) {
-  title = title.replace(/\([A-Z]*?\)/g, '');
+  title = title.replace(/ \([A-Z]*?\)/g, '');
   var match = /(.*?\([0-9]*\))/.exec(title);
   return match ? match[1].trim() : null;
 }
 
 function sanitizeForFileName(title) {
   title = title.replace(/:/g, ' -');
-  return title.replace(/[\/*?"<>|]/g, '');
+  return title.replace(/[\/*?"<>|]/g, '').trim();
 }
 
 function parseFileName(name) {
@@ -213,6 +216,7 @@ function parseFileName(name) {
 
   file.original = name;
   file.multi = /multi/i.test(name);
+  file.vo = !file.multi && /VO/.test(name);
   
   if (/1080p/i.test(name))
     file.quality = 1080;

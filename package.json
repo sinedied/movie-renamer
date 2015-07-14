@@ -1,6 +1,6 @@
 {
   "name": "movie-renamer",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "automated movie renamer scraping names from IMDB",
   "repository": { 
     "type" : "git"
