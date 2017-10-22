@@ -48,6 +48,7 @@ function getFinalName(file, baseName) {
   if (!file.results || !file.results.length)
     return null;
 
+  var index;
   if (!baseName && file.year) {
     var regex = new RegExp(file.year);
 
@@ -63,6 +64,9 @@ function getFinalName(file, baseName) {
   
   if (file.multi)
     name += ' [MULTi]';
+
+  if (file.dts)
+    name += ' [DTS]';
   
   if (file.vo)
     name += ' [VO]';
@@ -176,7 +180,7 @@ function getMovies(path) {
     files = _.filter(files, function(name) {
       return name.indexOf(movieExt, name.length - movieExt.length) !== -1;
     });
-    
+
     return _.map(files, parseFileName);
   });
 }
@@ -197,6 +201,9 @@ function getImdbName(search) {
       });
     
     return results;
+  }, function(result) {
+    log('Error while retrieving results for "' + search + '": ' 
+      + JSON.stringify(result));
   });  
 }
 
@@ -223,6 +230,9 @@ function parseFileName(name) {
   
   if (/720p/i.test(name))
     file.quality = 720;
+
+  if (/dts/i.test(name))
+    file.dts = true;
 
   name = name.substring(0, name.length - movieExt.length);
   name = name.replace(/\./g, ' ');
