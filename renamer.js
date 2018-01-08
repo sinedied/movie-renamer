@@ -5,7 +5,8 @@ var fs = require('fs'),
     q = require('q'),
     request = require('request-promise'),
     inquirer = require("inquirer"),
-    cheerio = require('cheerio');
+    cheerio = require('cheerio'),
+    path = require('path');
 
 // constants	
 var imdbUrl = 'http://www.imdb.com/find?q=';
@@ -70,6 +71,12 @@ function getFinalName(file, baseName) {
   
   if (file.vo)
     name += ' [VO]';
+
+  if (file.atmos)
+    name += ' [Atmos]';
+
+  if (file.bluray)
+    name += ' [BluRay]';
   
   if (file.quality)
     name += ' [' + file.quality + 'p]';
@@ -163,7 +170,7 @@ function renameFiles(files) {
 
   _.each(files, function(file) {
     if (file.new) {
-      fs.rename(file.original, file.new, function(err) {
+      fs.rename(path.join(process.argv[2],file.original), path.join(process.argv[2],file.new), function(err) {
         if (err)
           log('Error while renaming "' + file.original + '": ' + err);
       });
@@ -225,6 +232,9 @@ function parseFileName(name) {
   file.multi = /multi/i.test(name);
   file.vo = !file.multi && /VO/.test(name);
   
+   if (/2160p/i.test(name) || /4k/i.test(name))
+    file.quality = 2160;
+    
   if (/1080p/i.test(name))
     file.quality = 1080;
   
@@ -233,6 +243,12 @@ function parseFileName(name) {
 
   if (/dts/i.test(name))
     file.dts = true;
+
+  if (/bluray/i.test(name))
+    file.bluray = true;
+
+  if (/atmos/i.test(name))
+    file.atmos = true;
 
   name = name.substring(0, name.length - movieExt.length);
   name = name.replace(/\./g, ' ');
@@ -256,11 +272,14 @@ function parseFileName(name) {
   // clean
   var cleanSeparators = [
     / \([0-9]*\).*/,
+    /2160p.*/i,
     /1080p.*/i,
     /720p.*/i,
     / multi .*/i,
     /bluray.*/i,
     /x264.*/i,
+    /x265.*/i,
+    /hevc.*/i,
     /ac3.*/i
   ];
   
