@@ -1,10 +1,10 @@
 {
   "name": "movie-renamer",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "automated movie renamer scraping names from IMDB",
-  "repository": { 
-    "type" : "git"
-  , "url" : "https://github.com/sinedied/movie-renamer.git"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sinedied/movie-renamer.git"
   },
   "bin": {
     "movie-renamer": "./renamer.js"
