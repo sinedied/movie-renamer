@@ -5,7 +5,8 @@ var fs = require('fs'),
     q = require('q'),
     request = require('request-promise'),
     inquirer = require("inquirer"),
-    cheerio = require('cheerio');
+    cheerio = require('cheerio'),
+    path = require('path');
 
 // constants	
 var imdbUrl = 'http://www.imdb.com/find?q=';
@@ -169,7 +170,7 @@ function renameFiles(files) {
 
   _.each(files, function(file) {
     if (file.new) {
-      fs.rename(process.argv[2] + '/' + file.original, process.argv[2] + '/' + file.new, function(err) {
+      fs.rename(path.join(process.argv[2],file.original), path.join(process.argv[2],file.new), function(err) {
         if (err)
           log('Error while renaming "' + file.original + '": ' + err);
       });
