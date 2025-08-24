@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import fs from 'fs';
-import inquirer from 'inquirer';
+import { confirm, select, input } from '@inquirer/prompts';
 import cheerio from 'cheerio';
 import path from 'path';
 
@@ -9,12 +9,14 @@ const imdbUrl = 'http://www.imdb.com/find?q=';
 const movieExt = '.mkv';
 
 // global
-const ui = new inquirer.ui.BottomBar();
-const log = ui.log.write;
 const progress = {
   total: 0,
   current: 0
 };
+
+function log(message) {
+  console.log(message);
+}
 
 async function main() {
   try {
@@ -32,7 +34,6 @@ async function main() {
     // Scrap names for all files
     await scrapNamesOnce(files);
 
-    ui.updateBottomBar('');
     const updatedFiles = await askUser(files);
 
     renameFiles(updatedFiles);
@@ -83,63 +84,70 @@ async function scrapNamesOnce(files) {
     const results = await getImdbName(file.name);
     file.results = results;
     progress.current++;
-    ui.updateBottomBar(`Scraped ${progress.current}/${progress.total}`);
+    process.stdout.write(`\rScraped ${progress.current}/${progress.total}`);
     return results;
   });
 
   // Wait until all scrap requests are finished
   await Promise.all(promises);
+  console.log(); // New line after progress
   return files;
 }
 
 async function askUser(files) {
   const skipRename = '>> Do not rename';
   const manualEntry = '>> Enter manually';
-  const questions = [];
 
   for (const file of files) {
     file.new = getFinalName(file);
 
     // best match?
     if (file.new) {
-      questions.push({
-        type: 'confirm',
-        name: `${file.original}.best`,
+      const useBestMatch = await confirm({
         message: `  ${file.original}\n -> ${file.new}`,
         default: true,
       });
-    }
 
-    // choose from results
-    const choices = file.results ? [skipRename, manualEntry, ...file.results] : [skipRename, manualEntry];
+      if (!useBestMatch) {
+        // choose from results
+        const choices = file.results ? [skipRename, manualEntry, ...file.results] : [skipRename, manualEntry];
+        
+        const selectedChoice = await select({
+          message: 'Choose name',
+          choices: choices.map(choice => ({ name: choice, value: choice })),
+        });
 
-    questions.push({
-      type: 'list',
-      name: `${file.original}.choice`,
-      message: 'Choose name',
-      choices: choices,
-      when: (answers) => file.new && !answers[`${file.original}.best`],
-    });
+        let baseName = selectedChoice;
+        
+        // Handle manual entry
+        if (baseName === manualEntry) {
+          baseName = await input({
+            message: 'Enter movie name manually (e.g., "Movie Title (2023)"):',
+          });
+          if (baseName) {
+            baseName = sanitizeForFileName(baseName.trim());
+          }
+        }
+        
+        baseName = baseName && baseName !== skipRename ? baseName : null;
+        file.new = baseName ? getFinalName(file, baseName) : null;
+      }
+    } else {
+      // No automatic match found, ask user to choose
+      const choices = file.results ? [skipRename, manualEntry, ...file.results] : [skipRename, manualEntry];
+      
+      const selectedChoice = await select({
+        message: `Choose name for "${file.original}"`,
+        choices: choices.map(choice => ({ name: choice, value: choice })),
+      });
 
-    // manual entry question
-    questions.push({
-      type: 'input',
-      name: `${file.original}.manual`,
-      message: 'Enter movie name manually (e.g., "Movie Title (2023)"):',
-      when: (answers) => answers[`${file.original}.choice`] === manualEntry,
-    });
-  }
-
-  const answers = await inquirer.prompt(questions);
-
-  for (const file of files) {
-    // update new file name if best choice was not selected
-    if (file.new && !answers[`${file.original}.best`]) {
-      let baseName = answers[`${file.original}.choice`];
+      let baseName = selectedChoice;
       
       // Handle manual entry
       if (baseName === manualEntry) {
-        baseName = answers[`${file.original}.manual`];
+        baseName = await input({
+          message: 'Enter movie name manually (e.g., "Movie Title (2023)"):',
+        });
         if (baseName) {
           baseName = sanitizeForFileName(baseName.trim());
         }
