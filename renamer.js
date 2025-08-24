@@ -76,6 +76,9 @@ function getFinalName(file, baseName) {
   if (file.quality)
     name += ` [${file.quality}p${file.hdr ? ' HDR' : ''}]`;
 
+  if (file.h265)
+    name += ' [h265]';
+
   return name + movieExt;
 }
 
