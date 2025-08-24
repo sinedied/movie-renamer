@@ -1,67 +1,62 @@
 #!/usr/bin/env node
-
-var fs = require('fs'),
-    _ = require('lodash'),
-    q = require('q'),
-    request = require('request-promise'),
-    inquirer = require("inquirer"),
-    cheerio = require('cheerio'),
-    path = require('path');
+import fs from 'fs';
+import request from 'request-promise';
+import inquirer from 'inquirer';
+import cheerio from 'cheerio';
+import path from 'path';
 
 // constants	
-var imdbUrl = 'http://www.imdb.com/find?q=';
-var resultSelector = '.findList .result_text';
-var movieExt = '.mkv';
+const imdbUrl = 'http://www.imdb.com/find?q=';
+const movieExt = '.mkv';
 
 // global
-var ui = new inquirer.ui.BottomBar();
-var log = ui.log.write;
-var progress = {
+const ui = new inquirer.ui.BottomBar();
+const log = ui.log.write;
+const progress = {
   total: 0,
   current: 0
 };
 
-function main() { 
-  var processedFiles = [];
-  log('Listing files...');
+async function main() {
+  try {
+    log('Listing files...');
 
-  getMovies(process.argv[2])
-    .then(function(files) {
-      if (!files.length) {
-        log('No files to process!');
-        throw 1;
-      }
+    const files = await getMovies(process.argv[2]);
+    if (!files.length) {
+      log('No files to process!');
+      return;
+    }
 
-      log('Scraping IMDB results...');
-      progress.total = files.length;
-      
-      // scrap names for all files
-      return scrapNamesOnce(files);
-    })
-    .then(function(files) {
-      ui.updateBottomBar('');
-      return askUser(files);
-    })
-    .then(renameFiles);
+    log('Scraping IMDB results...');
+    progress.total = files.length;
+
+    // Scrap names for all files
+    await scrapNamesOnce(files);
+
+    ui.updateBottomBar('');
+    const updatedFiles = await askUser(files);
+
+    renameFiles(updatedFiles);
+  } catch (error) {
+    log('An error occurred:', error);
+  }
 }
 
 function getFinalName(file, baseName) {
   if (!file.results || !file.results.length)
     return null;
 
-  var index;
+  let index;
   if (!baseName && file.year) {
-    var regex = new RegExp(file.year);
+    let regex = new RegExp(file.year);
 
-    index = _.findIndex(file.results, function(result) {
-      return regex.test(result);
-    });
+    index = file.results.findIndex(result => regex.test(result));
   }
   
   if (!index || index < 0)
     index = 0;
   
-  var name = baseName || file.results[index];
+  let name = baseName || file.results[index];
   
   if (file.multi)
     name += ' [MULTi]';
@@ -75,149 +70,123 @@ function getFinalName(file, baseName) {
   if (file.atmos)
     name += ' [Atmos]';
 
-  if (file.bluray)
-    name += ' [BluRay]';
+  // if (file.bluray)
+  //   name += ' [BluRay]';
   
   if (file.quality)
-    name += ' [' + file.quality + 'p]';
+    name += ` [${file.quality}p${file.hdr ? ' HDR' : ''}]`;
 
   return name + movieExt;
 }
 
-function scrapNamesOnce(files) {
-  var promises = _.map(files, function(file) {
-    return getImdbName(file.name).then(function(results) {
-      file.results = results;
-      progress.current++;
-      ui.updateBottomBar('Scraped ' + progress.current + '/' + progress.total);
-      return results;
-    });
+async function scrapNamesOnce(files) {
+  const promises = files.map(async (file) => {
+    const results = await getImdbName(file.name);
+    file.results = results;
+    progress.current++;
+    ui.updateBottomBar(`Scraped ${progress.current}/${progress.total}`);
+    return results;
   });
 
-  // wait until all scrap requests are finished
-  return q.all(promises).then(function() {
-    return files;
-  });  
+  // Wait until all scrap requests are finished
+  await Promise.all(promises);
+  return files;
 }
 
-function scrapNames(files) {
-  // recursive promise builder so sequence requests
-  var promiseBuilder = function(i) {
-    return getImdbName(files[i].name).then(function(results) {
-      files[i].results = results;
-      progress.current++;
-      ui.updateBottomBar('Scraped ' + progress.current + '/' + progress.total);
-      return ++i < files.length ? promiseBuilder(i) : files;
-    });
-  }
-  
-  return promiseBuilder(0);
-}
+async function askUser(files) {
+  const skipRename = '>> Do not rename';
+  const questions = [];
 
-function askUser(files) {
-  var deferred = q.defer();
-  var questions = [];
-  var skipRename = '>> Do not rename';
-  
-  _.each(files, function(file) {
+  for (const file of files) {
     file.new = getFinalName(file);
 
     // best match?
-    questions.push({
-      type: 'confirm',
-      name: file.original + '.best',
-      message: '  ' + file.original + '\n -> ' + file.new,
-      default: true,
-      when: !!file.new
-    });
+    if (file.new) {
+      questions.push({
+        type: 'confirm',
+        name: `${file.original}.best`,
+        message: `  ${file.original}\n -> ${file.new}`,
+        default: true,
+      });
+    }
 
     // choose from results
-    var choices = file.results || [];
-    choices.unshift(skipRename);
+    const choices = file.results ? [skipRename, ...file.results] : [skipRename];
 
     questions.push({
       type: 'list',
-      name: file.original + '.choice',
+      name: `${file.original}.choice`,
       message: 'Choose name',
       choices: choices,
-      when: function(answers) {
-        return file.new && !answers[file.original + '.best'];
-      }
+      when: (answers) => file.new && !answers[`${file.original}.best`],
     });
+  }
 
-    // TODO: manual option
-    
-  });
+  const answers = await inquirer.prompt(questions);
 
-  inquirer.prompt(questions, function(answers) {
-    _.each(files, function(file) {
-      // update new file name if best choice was not selected
-      if (!answers[file.original + '.best']) {
-        var baseName = answers[file.original + '.choice'];
-        baseName = baseName && baseName !== skipRename ? baseName : null;
-        file.new = baseName ? getFinalName(file, baseName) : null;
-      }
-    });
+  for (const file of files) {
+    // update new file name if best choice was not selected
+    if (file.new && !answers[`${file.original}.best`]) {
+      let baseName = answers[`${file.original}.choice`];
+      baseName = baseName && baseName !== skipRename ? baseName : null;
+      file.new = baseName ? getFinalName(file, baseName) : null;
+    }
+  }
 
-    deferred.resolve(files);
-  });
-
-  return deferred.promise;
+  return files;
 }
 
 function renameFiles(files) {
   log('Renaming files...');
 
-  _.each(files, function(file) {
+  for (const file of files) {
     if (file.new) {
-      fs.rename(path.join(process.argv[2],file.original), path.join(process.argv[2],file.new), function(err) {
-        if (err)
-          log('Error while renaming "' + file.original + '": ' + err);
+      log(`- Renaming "${file.original}" to "${file.new}"`);
+      fs.rename(path.join(process.argv[2], file.original), path.join(process.argv[2], file.new), (err) => {
+        if (err) log(`Error while renaming "${file.original}": ${err}`);
       });
     }
-  });
+  }
 
   log('Done!');
 }
 
-function getMovies(path) {
-  var readdir = q.denodeify(fs.readdir);
-  
-  return readdir(path || __dirname).then(function(files) {
-    files = _.filter(files, function(name) {
-      return name.indexOf(movieExt, name.length - movieExt.length) !== -1;
-    });
-
-    return _.map(files, parseFileName);
-  });
+async function getMovies(dirPath) {
+  const directory = dirPath || __dirname;
+  const files = await fs.promises.readdir(directory);
+  const movieFiles = files.filter(name => name.endsWith(movieExt));
+  return movieFiles.map(parseFileName);
 }
 
-function getImdbName(search) {
-  var url = imdbUrl + encodeURIComponent(search);
-  
-  return request(url).then(function (body) {
-    var $ = cheerio.load(body);
-    var movies = $('.findList').first();
-    var results = [];
-    
-    movies.find('.result_text')
+async function getImdbName(search) {
+  let url = imdbUrl + encodeURIComponent(search);
+
+  try {
+    const body = await request(url);
+    let $ = cheerio.load(body);
+    let movies = $('.ipc-metadata-list').first();
+    let results = [];
+
+    movies.find('.ipc-metadata-list-summary-item__tc')
       .each(function() {
-        var title = cleanTitle($(this).text());
+        const rawTitle = $(this).find('.ipc-metadata-list-summary-item__t').text();
+        const year = $(this).find('.ipc-metadata-list-summary-item__tl').text();
+
+        let title = cleanTitle(rawTitle, year);
         if (title)
           results.push(sanitizeForFileName(title));
       });
-    
+
     return results;
-  }, function(result) {
+  } catch (result) {
     log('Error while retrieving results for "' + search + '": ' 
       + JSON.stringify(result));
-  });  
+  }
 }
 
-function cleanTitle(title) {
+function cleanTitle(title, year) {
   title = title.replace(/ \([A-Z]*?\)/g, '');
-  var match = /(.*?\([0-9]*\))/.exec(title);
-  return match ? match[1].trim() : null;
+  return title.trim() + ` (${year})`;
 }
 
 function sanitizeForFileName(title) {
@@ -226,7 +195,7 @@ function sanitizeForFileName(title) {
 }
 
 function parseFileName(name) {
-  var file = {};
+  let file = {};
 
   file.original = name;
   file.multi = /multi/i.test(name);
@@ -250,13 +219,19 @@ function parseFileName(name) {
   if (/atmos/i.test(name))
     file.atmos = true;
 
+  if (/10bit/i.test(name))
+    file.hdr = true;
+
+  if (/x265/i.test(name))
+    file.h265 = true;
+
   name = name.substring(0, name.length - movieExt.length);
   name = name.replace(/\./g, ' ');
   name = name.replace(/_/g, ' ');
   name = name.replace(/(\[|\])/g, '');
   
   // name (year)
-  var match = /(.*?\(([0-9]*)\))/.exec(name);
+  let match = /(.*?\(([0-9]*)\))/.exec(name);
   if (match) {
     name = match[1];
     file.year = match[2];
@@ -270,7 +245,7 @@ function parseFileName(name) {
   }
   
   // clean
-  var cleanSeparators = [
+  let cleanSeparators = [
     / \([0-9]*\).*/,
     /2160p.*/i,
     /1080p.*/i,
@@ -283,9 +258,9 @@ function parseFileName(name) {
     /ac3.*/i
   ];
   
-  _.each(cleanSeparators, function(sep) {
+  for (const sep of cleanSeparators) {
     name = name.replace(sep, '');
-  });
+  }
   
   name = sanitizeForFileName(name);
   file.name = name.trim();
