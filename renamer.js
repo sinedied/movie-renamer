@@ -6,6 +6,7 @@ import path from 'path';
 
 // constants	
 const imdbUrl = 'http://www.imdb.com/find?q=';
+const imdbQueryOptions = '&s=tt&ttype=ft';
 const movieExt = '.mkv';
 
 // global
@@ -187,7 +188,7 @@ async function getMovies(dirPath) {
 }
 
 async function getImdbName(search) {
-  let url = imdbUrl + encodeURIComponent(search);
+  let url = imdbUrl + encodeURIComponent(search) + imdbQueryOptions;
 
   try {
     const response = await fetch(url);
@@ -254,10 +255,10 @@ function parseFileName(name) {
   if (/atmos/i.test(name))
     file.atmos = true;
 
-  if (/10bit/i.test(name))
+  if (/10bit/i.test(name) || /hdr\]/i.test(name))
     file.hdr = true;
 
-  if (/x265/i.test(name))
+  if (/(x|h)265/i.test(name))
     file.h265 = true;
 
   name = name.substring(0, name.length - movieExt.length);
