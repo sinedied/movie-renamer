@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import { confirm, select, input } from '@inquirer/prompts';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio';
 import path from 'path';
 
 // constants	
