@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from 'fs';
-import request from 'request-promise';
 import inquirer from 'inquirer';
 import cheerio from 'cheerio';
 import path from 'path';
@@ -95,6 +94,7 @@ async function scrapNamesOnce(files) {
 
 async function askUser(files) {
   const skipRename = '>> Do not rename';
+  const manualEntry = '>> Enter manually';
   const questions = [];
 
   for (const file of files) {
@@ -111,7 +111,7 @@ async function askUser(files) {
     }
 
     // choose from results
-    const choices = file.results ? [skipRename, ...file.results] : [skipRename];
+    const choices = file.results ? [skipRename, manualEntry, ...file.results] : [skipRename, manualEntry];
 
     questions.push({
       type: 'list',
@@ -119,6 +119,14 @@ async function askUser(files) {
       message: 'Choose name',
       choices: choices,
       when: (answers) => file.new && !answers[`${file.original}.best`],
+    });
+
+    // manual entry question
+    questions.push({
+      type: 'input',
+      name: `${file.original}.manual`,
+      message: 'Enter movie name manually (e.g., "Movie Title (2023)"):',
+      when: (answers) => answers[`${file.original}.choice`] === manualEntry,
     });
   }
 
@@ -128,6 +136,15 @@ async function askUser(files) {
     // update new file name if best choice was not selected
     if (file.new && !answers[`${file.original}.best`]) {
       let baseName = answers[`${file.original}.choice`];
+      
+      // Handle manual entry
+      if (baseName === manualEntry) {
+        baseName = answers[`${file.original}.manual`];
+        if (baseName) {
+          baseName = sanitizeForFileName(baseName.trim());
+        }
+      }
+      
       baseName = baseName && baseName !== skipRename ? baseName : null;
       file.new = baseName ? getFinalName(file, baseName) : null;
     }
@@ -162,7 +179,13 @@ async function getImdbName(search) {
   let url = imdbUrl + encodeURIComponent(search);
 
   try {
-    const body = await request(url);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const body = await response.text();
     let $ = cheerio.load(body);
     let movies = $('.ipc-metadata-list').first();
     let results = [];
@@ -178,9 +201,10 @@ async function getImdbName(search) {
       });
 
     return results;
-  } catch (result) {
+  } catch (error) {
     log('Error while retrieving results for "' + search + '": ' 
-      + JSON.stringify(result));
+      + error.message);
+    return [];
   }
 }
 
