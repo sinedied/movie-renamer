@@ -4,11 +4,11 @@
   "description": "automated movie renamer scraping names from IMDB",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sinedied/movie-renamer.git"
+    "url": "git+https://github.com/sinedied/movie-renamer.git"
   },
   "type": "module",
   "bin": {
-    "movie-renamer": "./renamer.js"
+    "movie-renamer": "renamer.js"
   },
   "author": "noda",
   "license": "MIT",
