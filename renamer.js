@@ -6,7 +6,6 @@ import path from 'path';
 
 // constants	
 const imdbUrl = 'http://www.imdb.com/find?q=';
-const imdbQueryOptions = '&s=tt&ttype=ft';
 const movieExt = '.mkv';
 
 // global
@@ -188,7 +187,7 @@ async function getMovies(dirPath) {
 }
 
 async function getImdbName(search) {
-  let url = imdbUrl + encodeURIComponent(search) + imdbQueryOptions;
+  let url = imdbUrl + encodeURIComponent(search);
 
   try {
     const response = await fetch(url);
@@ -199,13 +198,13 @@ async function getImdbName(search) {
     
     const body = await response.text();
     let $ = cheerio.load(body);
-    let movies = $('.ipc-metadata-list').first();
+    let movies = $('[data-testid=find-results-section-title] ul').first();
     let results = [];
 
     movies.find('.ipc-metadata-list-summary-item__tc')
       .each(function() {
         const rawTitle = $(this).find('.ipc-metadata-list-summary-item__t').text();
-        const year = $(this).find('.ipc-metadata-list-summary-item__tl').text();
+        const year = $(this).find('.ipc-metadata-list-summary-item__tl').children().first().text();
 
         let title = cleanTitle(rawTitle, year);
         if (title)
@@ -221,12 +220,14 @@ async function getImdbName(search) {
 }
 
 function cleanTitle(title, year) {
-  title = title.replace(/ \([A-Z]*?\)/g, '');
+  title = title.replaceAll(/ \([A-Z]*?\)/g, '');
+  title = title.replaceAll(/\s+/g, ' ');
   return title.trim() + ` (${year})`;
 }
 
 function sanitizeForFileName(title) {
   title = title.replace(/:/g, ' -');
+  title = title.replace(/\s+/g, ' ');
   return title.replace(/[\/*?"<>|]/g, '').trim();
 }
 
