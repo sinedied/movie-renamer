@@ -5,7 +5,7 @@ import * as cheerio from 'cheerio';
 import path from 'path';
 
 // constants	
-const imdbUrl = 'http://www.imdb.com/find?q=';
+const imdbUrl = 'http://www.imdb.com/fr/find?q=';
 const movieExt = '.mkv';
 
 // global
@@ -256,7 +256,7 @@ function parseFileName(name) {
   if (/atmos/i.test(name))
     file.atmos = true;
 
-  if (/10bit/i.test(name) || /hdr\]/i.test(name))
+  if (/10bit/i.test(name) || /hdr/i.test(name))
     file.hdr = true;
 
   if (/(x|h)265/i.test(name))
